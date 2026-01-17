@@ -1,3 +1,16 @@
+#!/usr/bin/env python3
+
+# Simon Ramirez 2026
+# version = '0.0.1'
+
+# GNU License
+# Copyright (c) 2025 
+# Simon Ramirez
+
+
+
+
+
 #Imports 
 from collections import defaultdict
 from datetime import datetime
