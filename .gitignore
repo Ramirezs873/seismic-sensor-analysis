@@ -1,0 +1,14 @@
+# macOS Finder metadata
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Icon files on external drives
+Icon
+
+# Thumbnails
+._*
+
+# macOS folder metadata
+.Spotlight-V100
+.Trashes
