@@ -33,6 +33,10 @@ from matplotlib.colors import Normalize
 from matplotlib import cm
 import matplotlib.gridspec as gridspec
 
+# Cross-correlation
+from scipy.stats import pearsonr
+
+
 def seismic_data(client1, 
                  network1, 
                  station1, 
@@ -89,11 +93,11 @@ def seismic_data(client1,
     # ----------------------------------------------------------------------
     # File check
     # ----------------------------------------------------------------------
-    time = t_start.strftime("%Y_%m_%d")
+    time = t_start.strftime("%Y-%m-%d")
     if ref_stat == True:
-        title = f'{network1}_{network2}'
+        title = f'{network1}_{network2}_{station1}_{station2}'
     else:
-        title = f'{network1}'
+        title = f'{network1}_{station1}'
     
     filename = f"station_data_{title}_{time}.mseed"
 
@@ -410,6 +414,7 @@ def polar_plot(wave_dict,
         lc.set_array(t)
 
         ax.add_collection(lc)
+        ax.set_rlim(0, 1.05)
 
         # Colour Bar
         cbar = plt.colorbar(lc, ax=ax, pad=0.1, shrink=0.5)
@@ -745,7 +750,7 @@ def polar_correction(wave_dict,
                      col_n=4,):
 
     """
-    Create polar plots from seismic waveform data stored in a dictionary.
+    Create polar plots with an applied peak correction from seismic waveform data stored in a dictionary.
 
     Parameters:
     wave_dict (dict):
@@ -906,3 +911,196 @@ def polar_correction(wave_dict,
     plt.tight_layout()
     plt.savefig('polar_correction_plots.png', dpi=300)
     plt.show()
+
+def cross_correlation(ref_dict, 
+                      target_dict, 
+                      NS_channel, 
+                      EW_channel, 
+                      col_n=4, 
+                      save_png=True):
+
+    """
+    Create polar plots with cross-correlation correction from seismic waveform data stored in a dictionary.
+
+    Parameters:
+    ref_dict (dict):
+        Dictionary containing seismic waveform data for a reference station.
+    target_dict (dict):
+        Dictionary containing seismic waveform data for target stations.
+    NS_channel (list of str):
+        Possible channel codes for North-South instrument component.
+    EW_channel (list of str):
+        Possible channel codes for East-West instrument component.
+    col_n (int):
+        Number of columns in the plot grid.
+    save_png (bool):
+        True/False. If True, save each plot as a PNG file.
+    """
+
+    # Calculate number of rows needed for figure. Set number of columns in function call
+    row_n = int(np.ceil(len(target_dict) / col_n)) 
+
+    # Prepare Figure
+    fig = plt.figure(figsize=(6*col_n, 6*row_n))
+
+    # Find appropriate NS and EW Channels from function input
+    def find_channel(stream, options):
+        for ch in options:
+            tr = stream.select(channel=ch)
+            if len(tr) > 0:
+                return tr[0]
+        return None
+    
+    ref_station = list(ref_dict.keys())[0]
+    ref_stream = Stream(ref_dict[ref_station])
+    ref_stream.sort(['channel'])
+
+    ref_NS = find_channel(ref_stream, NS_channel)
+    ref_EW = find_channel(ref_stream, EW_channel)
+
+    if ref_NS is None or ref_EW is None:
+        raise ValueError("Reference station missing required NS/EW channels")
+    
+    for i, (station, stream) in enumerate(target_dict.items(), start=1):
+            print(f"Processing {station}...")
+            st = Stream(stream)
+            st.sort(['channel'])
+            target_NS = find_channel(st, NS_channel) # Try to find NS channel from function input
+            target_EW = find_channel(st, EW_channel) # Try to find EW channel from function input
+
+            if target_NS is None or target_EW is None:
+                print(f"{station}: missing required channels (NS options: {NS_channel}, EW options: {EW_channel}), skipping.")
+                continue
+
+            if target_NS.stats.sampling_rate > ref_NS.stats.sampling_rate:
+                rNS = ref_NS.copy().resample(target_NS.stats.sampling_rate)
+                tNS = target_NS
+            elif ref_NS.stats.sampling_rate < target_NS.stats.sampling_rate:
+                tNS = target_NS.copy().resample(ref_NS.stats.sampling_rate)
+                rNS = ref_NS
+            else:
+                rNS = ref_NS
+                tNS = target_NS
+                
+            if target_EW.stats.sampling_rate > ref_EW.stats.sampling_rate:
+                rEW = ref_EW.copy().resample(target_EW.stats.sampling_rate)
+                tEW = target_EW
+            elif ref_EW.stats.sampling_rate < target_EW.stats.sampling_rate:
+                tEW = target_EW.copy().resample(ref_EW.stats.sampling_rate)
+                rEW = ref_EW
+            else:
+                tEW = target_EW
+                rEW = ref_EW
+
+            # Match channel lengths
+            n_NS = min(len(rNS.data), len(tNS.data))
+            n_EW = min(len(rEW.data), len(tEW.data))
+            x1 = rNS.data[:n_NS]
+            y1 = rEW.data[:n_EW]
+            x2 = tNS.data[:n_NS]
+            y2 = tEW.data[:n_EW] 
+
+            # Compute correlation for the signals
+            scipy_correlation_ns, _ = pearsonr(x1, x2)
+            scipy_correlation_ew, _ = pearsonr(y1, y2)
+            print(f'SciPy Correlation NS between {ref_station} and {station}:', f'{scipy_correlation_ns:.3f}')
+            print(f'SciPy Correlation EW between {ref_station} and {station}:', f'{scipy_correlation_ew:.3f}')
+
+            # Rotate
+            angles = np.deg2rad(np.linspace(0, 360, 361))
+            score_list = []
+            rNS_list = []
+            rEW_list = []
+
+            
+            for theta in angles:
+
+                # Rotate target components
+                rotated_target_NS =  np.cos(theta) * x2 + np.sin(theta) * y2
+                rotated_target_EW = -np.sin(theta) * x2 + np.cos(theta) * y2
+
+                # Compute Pearson correlation coefficients
+                rNS, _ = pearsonr(x1, rotated_target_NS)
+                rEW, _ = pearsonr(y1, rotated_target_EW)
+                
+                score = rNS + rEW
+                
+                score_list.append(score)
+                rNS_list.append(rNS)
+                rEW_list.append(rEW)
+
+            scores = np.array(score_list)
+
+            best_score = np.argmax(scores)
+            best_angle = np.rad2deg(angles[best_score])
+
+            print(f"Estimated orientation error for {station}: {best_angle:.2f}°")
+            print(f"Max correlation NS: {rNS_list[best_score]:.3f}")
+            print(f"Max correlation EW: {rEW_list[best_score]:.3f}")
+
+            # Apply peak normalization
+            scale = np.max(np.sqrt(x2**2 + y2**2))
+            NS_norm = x2 / scale
+            EW_norm = y2 / scale
+
+            # Gather polar coordinates
+            theta = np.arctan2(NS_norm, EW_norm)
+            r = np.sqrt(NS_norm**2 + EW_norm**2)
+            correction_angle = np.deg2rad(best_angle)
+
+            # Create polar plot-
+            ax = fig.add_subplot(row_n, col_n, i, projection="polar")
+            ax.plot(theta, 
+                    r, 
+                    alpha=0.30, 
+                    color = 'blue',
+                    label="Normalised Amplitude")
+            ax.plot(theta + correction_angle, 
+                    r, 
+                    alpha=0.65, 
+                    color = 'orange',
+                    label="Normalised Amplitude Corrected")
+                
+            # Legend
+            ax.legend(
+            loc="upper right",
+            bbox_to_anchor=(1.3, 1.1),
+            fontsize=8,
+            frameon=True)
+
+            # Add cardinal direction annotations
+            rmax = ax.get_rmax()
+            cardinals = {
+                "E": (0, 1.05 * rmax * 1.05),
+                "N": (np.pi / 2, rmax * 1.05),
+                "W": (np.pi, 1.05 * rmax * 1.05),
+                "S": (3 * np.pi / 2, rmax * 1.05)}
+
+            offset = 0.115 * rmax  # Offset for cardinal labels
+
+            for label, (angle, radius) in cardinals.items():
+                ax.text(
+                    angle,
+                    radius + offset,
+                    label,
+                    ha="center",
+                    va="center",
+                    fontsize=12,
+                    fontweight="bold",
+                    clip_on=False)
+                
+            # For title
+            time = ref_NS.stats.starttime.strftime("%Y-%m-%d %H:%M:%S")
+            timespan = ref_NS.stats.endtime - ref_NS.stats.starttime
+             
+            ax.set_title(f"Horizontal Particle Motion Plot \n for {station} at {time} for {timespan} seconds", y=1.15)    
+
+    stations = '_'.join(target_dict.keys())
+    plt.tight_layout()
+
+    if save_png == True:
+        plt.savefig(f'cross_correlation_{stations}_{time}.png', dpi=300)
+        
+    plt.show()
+
+
