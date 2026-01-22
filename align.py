@@ -972,19 +972,19 @@ def cross_correlation(ref_dict,
 
     # Setup reference station plot
     n_ref = min(len(ref_NS.data), len(ref_EW.data))
-    x_ref = ref_NS.data[:n_ref]
-    y_ref = ref_EW.data[:n_ref]
+    y_ref = ref_NS.data[:n_ref]
+    x_ref = ref_EW.data[:n_ref]
     # Apply peak normalization
     scale_ref = np.max(np.sqrt(x_ref**2 + y_ref**2))
     if scale_ref == 0:
         print(f"{ref_station}: zero amplitude signal.")
         
 
-    ref_NS_norm = x_ref / scale_ref
-    ref_EW_norm = y_ref / scale_ref
+    ref_EW_norm = x_ref / scale_ref
+    ref_NS_norm = y_ref / scale_ref
 
     # Gather polar coordinates 
-    theta_ref = np.arctan2(ref_NS_norm, ref_EW_norm)
+    theta_ref = np.arctan2(ref_NS_norm,ref_EW_norm)
     r_ref = np.sqrt(ref_NS_norm**2 + ref_EW_norm**2)
 
     # Plot reference station
@@ -1040,7 +1040,7 @@ def cross_correlation(ref_dict,
             if target_NS.stats.sampling_rate > ref_NS.stats.sampling_rate:
                 rNS = ref_NS.copy().resample(target_NS.stats.sampling_rate)
                 tNS = target_NS
-            elif ref_NS.stats.sampling_rate < target_NS.stats.sampling_rate:
+            elif ref_NS.stats.sampling_rate > target_NS.stats.sampling_rate:
                 tNS = target_NS.copy().resample(ref_NS.stats.sampling_rate)
                 rNS = ref_NS
             else:
@@ -1050,7 +1050,7 @@ def cross_correlation(ref_dict,
             if target_EW.stats.sampling_rate > ref_EW.stats.sampling_rate:
                 rEW = ref_EW.copy().resample(target_EW.stats.sampling_rate)
                 tEW = target_EW
-            elif ref_EW.stats.sampling_rate < target_EW.stats.sampling_rate:
+            elif ref_EW.stats.sampling_rate > target_EW.stats.sampling_rate:
                 tEW = target_EW.copy().resample(ref_EW.stats.sampling_rate)
                 rEW = ref_EW
             else:
@@ -1060,92 +1060,63 @@ def cross_correlation(ref_dict,
             
             # Match channel lengths
             n = min(len(rNS.data), len(rEW.data), len(tNS.data), len(tEW.data))
-            x1 = rNS.data[:n]
-            y1 = rEW.data[:n]
-            x2 = tNS.data[:n]
-            y2 = tEW.data[:n] 
+            y1 = rNS.data[:n]
+            x1 = rEW.data[:n]
+            y2 = tNS.data[:n]
+            x2 = tEW.data[:n] 
 
-
-            # Compute correlation for the signals
-            scipy_correlation_ns, _ = pearsonr(x1, x2)
-            scipy_correlation_ew, _ = pearsonr(y1, y2)
-            print(f'SciPy Correlation NS between {ref_station} and {station}:', f'{scipy_correlation_ns:.3f}')
-            print(f'SciPy Correlation EW between {ref_station} and {station}:', f'{scipy_correlation_ew:.3f}')
 
             # Apply peak normalization
-            scale1 = np.max(np.sqrt(x1**2 + y1**2))
+            
+            scale1 = np.max(np.sqrt((x1**2) + (y1**2)))
             x1 = x1 / scale1
             y1 = y1 / scale1
 
-            scale2 = np.max(np.sqrt(x2**2 + y2**2))
+            scale2 = np.max(np.sqrt((x2**2) + (y2**2)))
             x2 = x2 / scale2
             y2 = y2 / scale2
-
-            # Rotate
-            angles = np.deg2rad(np.linspace(0, 360, 360*20, endpoint=False)) # 360*x is the angle precision. *20 gives a value to the best 0.05 interval. 
-            score_list = []
-            target_NS_list = []
-            target_EW_list = []
-            avg_correlation_list =[]
-
-            
-            for theta in angles:
-
-                # Rotate target components
-                rotated_target_NS =  np.cos(theta) * x2 + np.sin(theta) * y2
-                rotated_target_EW = -np.sin(theta) * x2 + np.cos(theta) * y2
-
-                # Compute Pearson correlation coefficients
-                NS_pcc, _ = pearsonr(x1, rotated_target_NS)
-                EW_pcc, _ = pearsonr(y1, rotated_target_EW)
-                
-                avg_correlation = (NS_pcc +EW_pcc)/2
-                score = np.mean(x1 * rotated_target_NS + y1 * rotated_target_EW)
-
-
-                avg_correlation_list.append(avg_correlation)
-                score_list.append(score)
-                target_NS_list.append(NS_pcc)
-                target_EW_list.append(EW_pcc)
-
-            scores = np.array(score_list)
-            best_score_idx = np.argmax(scores)
-            best_score = scores[best_score_idx]
-
-            best_angle = np.rad2deg(angles[best_score_idx]) % 360
         
-            theta = np.deg2rad(best_angle)
-            best_correlation = avg_correlation_list[best_score_idx]
-
-
-
-            print(f"Rotation required for best correlation at {station}: {best_angle:.2f}°")
-            print(f"Max correlation NS: {target_NS_list[best_score_idx]:.3f}")
-            print(f"Max correlation EW: {target_EW_list[best_score_idx]:.3f}")
-            #print(f"Best Score is: {best_score:.3f}")
-            if best_correlation >=-1 and best_correlation <=-0.7:
-                print(f"Best average max correlation is: {best_correlation:.3f}. Strong anti-alignment")
-            elif best_correlation >=-0.7 and best_correlation <=-0.3:
-                print(f"Best average max correlation is: {best_correlation:.3f}. Moderate anti-alignment")
-            elif best_correlation >=-0.3 and best_correlation <=0.3:
-                print(f"Best average max correlation is: {best_correlation:.3f}. Weak alignment")
-            elif best_correlation >=0.3 and best_correlation <=0.7:
-                print(f"Best average max correlation is: {best_correlation:.3f}. Moderate alignment")
-            elif best_correlation >=0.7 and best_correlation <=1:
-                print(f"Best average max correlation is: {best_correlation:.3f}. Strong alignment")
-
+            # Method from Misalignment Angle Correction of Borehole 
+            # Seismic Sensors: The Case Study of
+            # the Collalto Seismic Network
+            # Diez Zaldívar
+            # 2016
             
+
+            S_r = x1 +1j*y1
+            S_k = x2 +1j*y2
+            
+
+
+            # m = (G^H G)^-1 G^H d)
+            # G = S_k, H is conjugate transpose matrix, d = S_r
+            # => m_k = (S_k^H * S_k)^-1 *S_k^H * S_r
+            # => m_k = sum(|S_k|^2)^-1 * sum(conj(S_k) *S_r)
+            m_k = np.sum(np.conj(S_k)* S_r)/np.sum(np.abs(S_k)**2)
+            phi = np.arctan2(np.imag(m_k), np.real(m_k))
+
+
 
             # Rotate entire signal
-            x2_aligned =  np.cos(theta) * x2 + np.sin(theta) * y2
-            y2_aligned = -np.sin(theta) * x2 + np.cos(theta) * y2
+            S_k_aligned = S_k * np.exp(1j *phi)
+            x2_aligned =  np.real(S_k_aligned)
+            y2_aligned = np.imag(S_k_aligned)
 
-            # Gather polar coordinates
-            theta_aligned = np.arctan2(x2_aligned, y2_aligned)
-            r_aligned = np.sqrt(x2_aligned**2 + y2_aligned**2)
             
 
-            # Create polar plot-
+            # Gather polar coordinates
+            theta_aligned = np.arctan2(y2_aligned, x2_aligned)
+            r_aligned = np.sqrt(x2_aligned**2 + y2_aligned**2)
+
+            # Compute rotation angle
+            angle_diff = np.rad2deg(phi)
+            if angle_diff > 180:
+                angle_diff = angle_diff - 360
+
+            print(f"Rotation required for best correlation at {station}: {angle_diff:.2f}°")
+            
+
+            # Create polar plot
             ax = fig.add_subplot(row_n, col_n, i, projection="polar")
             if underlying_plot == 'reference':
                 ax.plot(theta_ref,
@@ -1154,7 +1125,7 @@ def cross_correlation(ref_dict,
                         color = 'mediumpurple',
                         label=f"Reference Station: {ref_station}")
             elif underlying_plot == 'original':
-                theta_original = np.arctan2(x2, y2)
+                theta_original = np.arctan2(y2,x2)
                 r_original = np.sqrt(x2**2 + y2**2)
                 ax.plot(theta_original, 
                         r_original, 
@@ -1210,6 +1181,7 @@ def cross_correlation(ref_dict,
         
     plt.show()
         
+
 
 
 
