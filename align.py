@@ -1182,6 +1182,147 @@ def cross_correlation(ref_dict,
     plt.show()
         
 
+def tabulate_cc_correction(ref_dict, 
+                           target_dict,
+                           NS_channel, 
+                           EW_channel,
+                           location='default_title'):
+    
+    """
+    Tabulate correction angles for sensors from seismic waveform data stored in a dictionary.
+    
+    Parameters:
+    wave_dict (dict):
+        Dictionary containing seismic waveform data.
+    NS_channel (list of str):
+        Possible channel codes for North-South instrument component.
+    EW_channel (list of str):
+        Possible channel codes for East-West instrument component.  
+    location (str):
+        Title/location for the output table and CSV file.
+
+    Returns:
+    df (DataFrame):
+        DataFrame containing peak angles for each station.
+    """
+    
+    angle_results = []   # table storage
+    
+    # Find appropriate NS and EW Channels from function input
+    def find_channel(stream, options):
+        for ch in options:
+            tr = stream.select(channel=ch)
+            if len(tr) > 0:
+                return tr[0]
+        return None
+    
+    ref_station = list(ref_dict.keys())[0]
+    ref_stream = Stream(ref_dict[ref_station])
+    ref_stream.sort(['channel'])
+
+    ref_NS = find_channel(ref_stream, NS_channel)
+    ref_EW = find_channel(ref_stream, EW_channel)
+
+    if ref_NS is None or ref_EW is None:
+        raise ValueError("Reference station missing required NS/EW channels")
+    
+    print(f"Processing reference station: {ref_station}...")
+
+     
+    # Find appropriate NS and EW Channels from function input
+    def find_channel(stream, options):
+        for ch in options:
+            tr = stream.select(channel=ch)
+            if len(tr) > 0:
+                return tr[0]
+        return None
+        
+    for i, (station, stream) in enumerate(target_dict.items(), start=2):
+        print(f"Processing {station}...")
+        st = Stream(stream)
+        st.sort(['channel'])
+        target_NS = find_channel(st, NS_channel) # Try to find NS channel from function input
+        target_EW = find_channel(st, EW_channel) # Try to find EW channel from function input
+
+        if target_NS is None or target_EW is None:
+            print(f"{station}: missing required channels (NS options: {NS_channel}, EW options: {EW_channel}), skipping.")
+            continue
+
+        if target_NS.stats.sampling_rate > ref_NS.stats.sampling_rate:
+            rNS = ref_NS.copy().resample(target_NS.stats.sampling_rate)
+            tNS = target_NS
+        elif ref_NS.stats.sampling_rate > target_NS.stats.sampling_rate:
+            tNS = target_NS.copy().resample(ref_NS.stats.sampling_rate)
+            rNS = ref_NS
+        else:
+            rNS = ref_NS
+            tNS = target_NS
+                
+        if target_EW.stats.sampling_rate > ref_EW.stats.sampling_rate:
+            rEW = ref_EW.copy().resample(target_EW.stats.sampling_rate)
+            tEW = target_EW
+        elif ref_EW.stats.sampling_rate > target_EW.stats.sampling_rate:
+            tEW = target_EW.copy().resample(ref_EW.stats.sampling_rate)
+            rEW = ref_EW
+        else:
+            tEW = target_EW
+            rEW = ref_EW
+
+            
+        # Match channel lengths
+        n = min(len(rNS.data), len(rEW.data), len(tNS.data), len(tEW.data))
+        y1 = rNS.data[:n]
+        x1 = rEW.data[:n]
+        y2 = tNS.data[:n]
+        x2 = tEW.data[:n] 
+
+
+        # Apply peak normalization
+            
+        scale1 = np.max(np.sqrt((x1**2) + (y1**2)))
+        x1 = x1 / scale1
+        y1 = y1 / scale1
+
+        scale2 = np.max(np.sqrt((x2**2) + (y2**2)))
+        x2 = x2 / scale2
+        y2 = y2 / scale2
+        
+        # Method from Misalignment Angle Correction of Borehole 
+        # Seismic Sensors: The Case Study of
+        # the Collalto Seismic Network
+        # Diez Zaldívar
+        # 2016
+            
+
+        S_r = x1 +1j*y1
+        S_k = x2 +1j*y2
+            
+
+        # m = (G^H G)^-1 G^H d)
+        # G = S_k, H is conjugate transpose matrix, d = S_r
+        # => m_k = (S_k^H * S_k)^-1 *S_k^H * S_r
+        # => m_k = sum(|S_k|^2)^-1 * sum(conj(S_k) *S_r)
+        m_k = np.sum(np.conj(S_k)* S_r)/np.sum(np.abs(S_k)**2)
+        phi = np.arctan2(np.imag(m_k), np.real(m_k))
+
+        # Compute rotation angle
+        angle_diff = np.rad2deg(phi)
+        if angle_diff > 180:
+            angle_diff = angle_diff - 360
+
+
+        # Store results in table
+        angle_results.append({"Station": station,"Angle Correction": f'{angle_diff:.2f}'})
+
+    # Tabulate
+    time = ref_NS.stats.starttime.strftime("%Y-%m-%d %H-%M-%S")
+    df = pd.DataFrame(angle_results)
+    df.to_csv(f'seismic_directions_{location}.csv', index=False)
+    print(f"Alignments for {location} Earthquake @ {time} (UTC):")
+    #print(df.to_string(index=False))
+
+    return df
+
 
 
 
