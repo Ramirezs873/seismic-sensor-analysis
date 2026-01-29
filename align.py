@@ -33,9 +33,6 @@ from matplotlib.colors import Normalize
 from matplotlib import cm
 import matplotlib.gridspec as gridspec
 
-# Cross-correlation
-from scipy.stats import pearsonr
-
 
 def seismic_data(client1, 
                  network1, 
@@ -93,11 +90,12 @@ def seismic_data(client1,
     # ----------------------------------------------------------------------
     # File check
     # ----------------------------------------------------------------------
+    stat_number = len(station1)
     time = t_start.strftime("%Y-%m-%d")
     if ref_stat == True:
-        title = f'{network1}_{network2}_{station1}_{station2}'
+        title = f'{network1}_{network2}_{stat_number}stations_{station2}'
     else:
-        title = f'{network1}_{station1}'
+        title = f'{network1}_{stat_number}stations'
     
     filename = f"station_data_{title}_{time}.mseed"
 
@@ -912,12 +910,14 @@ def polar_correction(wave_dict,
     plt.savefig('polar_correction_plots.png', dpi=300)
     plt.show()
 
+
 def cross_correlation(ref_dict, 
                       target_dict, 
                       NS_channel, 
                       EW_channel, 
                       col_n=4,
                       underlying_plot='reference', 
+                      png_title = 'default', 
                       save_png=True):
 
     """
@@ -967,6 +967,7 @@ def cross_correlation(ref_dict,
 
     if ref_NS is None or ref_EW is None:
         raise ValueError("Reference station missing required NS/EW channels")
+        
     
     print(f"Processing reference station: {ref_station}...")
 
@@ -1175,12 +1176,16 @@ def cross_correlation(ref_dict,
 
     stations = '_'.join(target_dict.keys())
     plt.tight_layout()
+    stat_number = len(stations)
 
     if save_png == True:
-        plt.savefig(f'cross_correlation_{stations}_{time}.png', dpi=300)
+        if png_title == 'default':
+            plt.savefig(f'cross_correlation_{stat_number}stations_{time}.png', dpi=300)
+        else:
+            plt.savefig(f'{png_title}.png', dpi=300)
+
         
     plt.show()
-        
 
 def tabulate_cc_correction(ref_dict, 
                            target_dict,
@@ -1322,6 +1327,8 @@ def tabulate_cc_correction(ref_dict,
     #print(df.to_string(index=False))
 
     return df
+
+
 
 
 
