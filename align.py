@@ -355,15 +355,15 @@ def find_channel(stream, options):
     # If none are found
     return None 
 
-def polar_plot(wave_dict, 
-               NS_channel, 
-               EW_channel,
-               peak_method='first', 
-               col_n=4,
-               save_png=True):
+def polar_plot_peak(wave_dict, 
+                    NS_channel, 
+                    EW_channel,
+                    peak_method='first', 
+                    col_n=4,
+                    save_png=True):
 
     """
-    Create polar plots from seismic waveform data stored in a dictionary.
+    Create polar plots from seismic waveform data stored in a dictionary and plot peaks.
 
     Parameters:
     wave_dict (dict):
@@ -524,14 +524,14 @@ def polar_plot(wave_dict,
 
     plt.show()
 
-def waveform_and_polar(wave_dict,  
-                       NS_channel, 
-                       EW_channel,
-                       peak_method='first',
-                       save_png=True):
+def waveform_and_polar_peaks(wave_dict,  
+                            NS_channel, 
+                            EW_channel,
+                            peak_method='first',
+                            save_png=True):
 
     """
-    Create waveform plots and polar plots from seismic waveform data stored in a dictionary.
+    Create waveform plots and polar plots from seismic waveform data stored in a dictionary and plot peaks.
 
     Parameters:
     wave_dict (dict):
@@ -707,7 +707,7 @@ def tabulate_peaks(wave_dict,
                    location='default_title'):
     
     """
-    Tabulate angles of first peaks from seismic waveform data stored in a dictionary.
+    Tabulate angles of peaks from seismic waveform data stored in a dictionary.
     
     Parameters:
     wave_dict (dict):
@@ -788,16 +788,16 @@ def tabulate_peaks(wave_dict,
 
     return df
 
-def polar_correction(wave_dict, 
-                     NS_channel, 
-                     EW_channel,
-                     peak_method='first', 
-                     ref_angle=0,
-                     col_n=4,
-                     save_png=True):
+def peak_method_correction(wave_dict, 
+                           NS_channel, 
+                           EW_channel,
+                           peak_method='first', 
+                           ref_angle=0,
+                           col_n=4,
+                           save_png=True):
 
     """
-    Create polar plots with an applied peak correction from seismic waveform data stored in a dictionary.
+    Create polar plots with an applied correction based on the peak method from seismic waveform data stored in a dictionary.
 
     Parameters:
     wave_dict (dict):
@@ -958,14 +958,14 @@ def polar_correction(wave_dict,
         plt.savefig('polar_correction_plots.png', dpi=300)
     plt.show()
 
-def cross_correlation(ref_dict, 
-                      target_dict, 
-                      NS_channel, 
-                      EW_channel, 
-                      col_n=4,
-                      underlying_plot='reference', 
-                      png_title = 'default', 
-                      save_png=True):
+def cc_correction(ref_dict, 
+                  target_dict, 
+                  NS_channel, 
+                  EW_channel, 
+                  col_n=4,
+                  underlying_plot='reference', 
+                  png_title = 'default', 
+                  save_png=True):
 
     """
     Create polar plots with cross-correlation correction to a reference station from seismic waveform data stored in a dictionary.
@@ -1345,7 +1345,10 @@ def tabulate_cc_correction(ref_dict,
     return df
 
     
+
     
+    
+
 
 
 
