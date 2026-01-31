@@ -18,14 +18,10 @@ import numpy as np
 import pandas as pd
 import os
 from obspy import read
-
-# Seismic
 import obspy
 from obspy.clients.fdsn import Client
 from obspy import UTCDateTime as UTC
 from obspy import Stream
-
-#Plotting
 import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
 from matplotlib.collections import LineCollection
@@ -87,11 +83,10 @@ def seismic_data(client1,
         Dictionary containing seismic waveform data.
     """
     
-    # ----------------------------------------------------------------------
-    # File check
-    # ----------------------------------------------------------------------
-    stat_number = len(station1)
-    time = t_start.strftime("%Y-%m-%d")
+    # Check if file already exists
+    stat_number = len(station1) # Number of stations
+    time = t_start.strftime("%Y-%m-%d") # Start date of data
+
     if ref_stat == True:
         title = f'{network1}_{network2}_{stat_number}stations_{station2}'
     else:
@@ -106,9 +101,7 @@ def seismic_data(client1,
     else:
         print("File not found. Downloading data")
 
-        # ----------------------------------------------------------------------
-        # Group 1
-        # ----------------------------------------------------------------------
+        # Gather data from target stations
         g1 = Client(base_url=client1, 
                     user=user1, 
                     password=password1) # FDSN client 
@@ -118,33 +111,30 @@ def seismic_data(client1,
                                         location=location1, 
                                         channel=channel1, 
                                         starttime=t_start, 
-                                        endtime=t_end) #Gather waveform data
+                                        endtime=t_end) # Gather waveform data
 
-        # ----------------------------------------------------------------------
-        # Optional Group 2
-        # ----------------------------------------------------------------------
+        # Optional - Gather data from a reference station
         if ref_stat == True:
             g2 = Client(base_url=client2, 
                         user=user2, 
                         password=password2) # FDSN client 
-
+            
             station_data2 = g2.get_waveforms(network=network2, 
                                             station=station2, 
                                             location=location2, 
                                             channel=channel2, 
                                             starttime=t_start, 
-                                            endtime=t_end) #Gather waveform data
+                                            endtime=t_end) # Gather waveform data
 
             station_data = station_data + station_data2
-            station_data.merge() 
+            station_data.merge() # Combine the target and reference station data to be written to a single file and stored as a dictionary
 
             
-    # ----------------------------------------------------------------------
-    # Write to a dictionary
-    # ----------------------------------------------------------------------
+    # Save as a mseed file
     filename = f"station_data_{title}_{time}.mseed"
     station_data.write(filename, format="mseed")
 
+    # Write to a dictionary
     wave_dict = defaultdict(list) 
 
     for tr in station_data:
@@ -176,13 +166,53 @@ def select_time(wave_dict,
     new_dict (dict):
         Dictionary containing selected seismic waveform data.
     """
+
+    # Establish timespan
     t_end = t_start + duration
+
+    # Trim to desired timespan and write to a direction
     new_dict = defaultdict(list)
     for station_name in wave_dict:
-        st = Stream(wave_dict[station_name]).copy()
+        st = Stream(wave_dict[station_name]).copy() # Copy to avoid overwriting data
         st.trim(starttime=t_start, endtime=t_end, pad=False)
 
         new_dict[station_name].extend(st.traces)
+
+    return new_dict
+
+def apply_window(wave_dict, 
+                 type = 'hann',
+                 max_percentage = None,
+                 max_length = 1, 
+                 side = 'both'):
+    
+    """
+    Apply a window function from seismic waveform data stored in a dictionary without altering the original.
+
+    Parameters:
+    wave_dict (dict):
+        Dictionary containing seismic waveform data.
+    type (str):
+        Type of window function applied. 
+        See the 'Supported Methods' for obspy.core.trace.Trace.taper function for a list of available window functions.
+    max_percentage (float):
+        Decimal percentage of window function applied at an end.
+    max_length (float):
+        Length in seconds of window function applied at an end.
+    side (str):
+        End(s) at which the window function is applied. 
+        Available options are "left", "right", "both".
+    """
+    
+    # Apply the window function and write to a dictionary
+    new_dict = defaultdict(list)
+
+    for station_name, traces in wave_dict.items():  
+        st = Stream(traces).copy() # Copy to avoid overwriting data
+        st.taper(type=type, max_percentage=max_percentage, max_length=max_length, side=side)
+
+        new_dict[station_name].extend(st)
+    
     return new_dict
 
 def apply_filter(wave_dict, 
@@ -219,10 +249,13 @@ def apply_filter(wave_dict,
         Dictionary containing filtered seismic waveform data.
     """
 
+    # Setup dictionary
     filtered_dict = {}
 
+    # Loop through and apply filter to the traces
     for station_name, traces in wave_dict.items():
-        st = Stream([tr.copy() for tr in traces])
+        st = Stream([tr.copy() for tr in traces]) # Copy to avoid overwriting data
+
         if filter_type in ('bandpass', 'bandstop'):
             st.filter(type=filter_type, 
                       freqmin=freqmin, 
@@ -239,7 +272,7 @@ def apply_filter(wave_dict,
         else:
             raise ValueError(f"Unsupported filter type: {filter_type}") #'lowpass_cheby_2', 'lowpass_fir', 'remez_fir' currently not setup
 
-        filtered_dict[station_name] = st.traces
+        filtered_dict[station_name] = st.traces # Write to a dictionary
         
     return filtered_dict
 
@@ -259,21 +292,28 @@ def apply_agc(wave_dict,
     agc_dict (dict):
         Dictionary containing AGC applied seismic waveform data.
     """
+
+    # Setup dictionary
     agc_dict = defaultdict(list)
+
+    # Loop through and apply AGC to the traces
     for station in wave_dict:
         for tr in wave_dict[station]:
-            agc_trace = tr.copy()
+            agc_trace = tr.copy() # Copy to avoid overwriting data
             sr = agc_trace.stats.sampling_rate  # Sampling rate
                 
             N = int(window_s * sr) # Number of samples in the AGC window
             N = min(N, len(agc_trace.data)) # Ensure window does not exceed trace length
             if N < 3:
                 N = 3  # Ensure at least 3 samples in the window
+
             data = agc_trace.data.astype(float) 
             rms = np.sqrt(np.convolve(data**2, np.ones(N)/N, mode='same')) # Compute RMS using AGC window
             rms[rms < 1e-10] = 1e-10 # Prevent division by zero
+
             agc_trace.data = data / rms 
-            agc_dict[station].append(agc_trace)
+
+            agc_dict[station].append(agc_trace) # Write to dictionary
 
     return agc_dict
 
@@ -287,6 +327,7 @@ def plot_streams(wave_dict):
         Dictionary containing seismic waveform data.
     """
     
+    # Loop through and plot streams
     for station_name in wave_dict:
         if not wave_dict[station_name]:    # Skip empty stations
             print(f"Skipping empty station: {station_name}")
@@ -295,11 +336,31 @@ def plot_streams(wave_dict):
         print(f"Plotting {station_name}")
         st.plot()
 
+def find_channel(stream, options):
+    """
+    Find appropriate NS and EW Channels from a chosen stream.
+    
+    Parameters:
+    stream (obspy.core.stream.Stream):
+        An ObsPy stream object.
+    options (list of str):
+        A list of channel codes.
+    """
+    # Loop through streams and find the first associated channel code
+    for ch in options:
+        tr = stream.select(channel=ch)
+        if len(tr) > 0:
+            return tr[0] # Return first channel code
+        
+    # If none are found
+    return None 
+
 def polar_plot(wave_dict, 
                NS_channel, 
                EW_channel,
                peak_method='first', 
-               col_n=4):
+               col_n=4,
+               save_png=True):
 
     """
     Create polar plots from seismic waveform data stored in a dictionary.
@@ -316,6 +377,8 @@ def polar_plot(wave_dict,
                                  'first', 'second', or 'third' for first, second, or third peak respectively.
     col_n (int):
         Number of columns in the plot grid.
+    save_png (bool):
+        True/False. If True, save each plot as a PNG file.
     """
     
     station_list = list(wave_dict.keys())
@@ -326,14 +389,7 @@ def polar_plot(wave_dict,
     # Prepare Figure
     fig = plt.figure(figsize=(9*col_n, 9*row_n))
 
-    # Find appropriate NS and EW Channels from function input
-    def find_channel(stream, options):
-        for ch in options:
-            tr = stream.select(channel=ch)
-            if len(tr) > 0:
-                return tr[0]
-        return None
-    
+    # Loop through stations, find peaks, and plot
     for i, station in enumerate(station_list, start=1):
         print(f"Processing {station}...")
         st = Stream(wave_dict[station])
@@ -389,7 +445,6 @@ def polar_plot(wave_dict,
             else:
                 print(f"{station}: less than {idx+1} peaks found, no {peak_method} peak available.")
             
-
         # Create polar plot
         ax = fig.add_subplot(row_n, col_n, i, projection="polar")
 
@@ -412,7 +467,9 @@ def polar_plot(wave_dict,
         lc.set_array(t)
 
         ax.add_collection(lc)
-        ax.set_rlim(0, 1.05)
+
+        # Apply an r limit past 1 to assist with data visualisation
+        ax.set_rlim(0, 1.2)
 
         # Colour Bar
         cbar = plt.colorbar(lc, ax=ax, pad=0.1, shrink=0.5)
@@ -433,19 +490,17 @@ def polar_plot(wave_dict,
             # Legend
             ax.legend(
             loc="upper left",
-            #bbox_to_anchor=(-1.3, 1.1),
             fontsize=10,
             frameon=True)
 
             # Add cardinal direction annotations
-            rmax = ax.get_rmax()
             cardinals = {
-                "E": (0, rmax * 1.05),
-                "N": (np.pi / 2, rmax * 1.05),
-                "W": (np.pi, rmax * 1.05),
-                "S": (3 * np.pi / 2, rmax * 1.05)}
+                "E": (0, 1.05 * 1.05),
+                "N": (np.pi / 2, 1.05),
+                "W": (np.pi, 1.05 * 1.05),
+                "S": (3 * np.pi / 2, 1.05)}
 
-            offset = 0.115 * rmax  # Offset for cardinal labels
+            offset = 0.385  # Offset for cardinal labels
 
             for label, (angle, radius) in cardinals.items():
                 ax.text(
@@ -458,11 +513,15 @@ def polar_plot(wave_dict,
                     fontweight="bold",
                     clip_on=False)
             
-              
+            # Create Title  
             ax.set_title(f"Horizontal Particle Motion Plot for {station} at {time} for {timespan} seconds", y=1.15)    
 
+    # Display
     plt.tight_layout()
-    plt.savefig('seismic_polar_plots.png', dpi=300)
+    # Save as png
+    if save_png == True:
+        plt.savefig('seismic_polar_plots.png', dpi=300)
+
     plt.show()
 
 def waveform_and_polar(wave_dict,  
@@ -488,16 +547,10 @@ def waveform_and_polar(wave_dict,
         True/False. If True, save each plot as a PNG file.
     """
     
+    # Setup station list
     station_list = list(wave_dict.keys())
-
-    # Find appropriate NS and EW Channels from function input
-    def find_channel(stream, options):
-        for ch in options:
-            tr = stream.select(channel=ch)
-            if len(tr) > 0:
-                return tr[0]
-        return None
     
+    # Loop through stations, find peaks, and plot
     for station in station_list:
         print(f"Processing {station}...")
         st = Stream(wave_dict[station])
@@ -581,8 +634,9 @@ def waveform_and_polar(wave_dict,
         lc.set_array(t)
 
         ax.add_collection(lc)
-        ax.set_rlim(0, 1.05)
 
+        # Apply an r limit past 1 to assist with data visualisation
+        ax.set_rlim(0, 1.2)
 
         # Colour Bar
         cbar = plt.colorbar(lc, ax=ax, pad=0.1, shrink=0.5)
@@ -608,14 +662,14 @@ def waveform_and_polar(wave_dict,
             frameon=True)
 
             # Add cardinal direction annotations
-            rmax = ax.get_rmax()
+            ax.set_rmax(1.2)
             cardinals = {
-                "E": (0, rmax * 1.05),
-                "N": (np.pi / 2, rmax * 1.05),
-                "W": (np.pi, rmax * 1.05),
-                "S": (3 * np.pi / 2, rmax * 1.05)}
+                "E": (0, 1.05 * 1.05),
+                "N": (np.pi / 2, 1.05),
+                "W": (np.pi, 1.05 * 1.05),
+                "S": (3 * np.pi / 2, 1.05)}
 
-            offset = 0.17 * rmax  # Offset for cardinal labels
+            offset = 0.385  # Offset for cardinal labels
 
             for label, (angle, radius) in cardinals.items():
                 ax.text(
@@ -632,22 +686,18 @@ def waveform_and_polar(wave_dict,
             ax_w.plot(t, NS_norm, label=trNS.stats.channel, linewidth=1)
             ax_w.plot(t, EW_norm, label=trEW.stats.channel, linewidth=1)
 
+            # Display
             ax_w.set_xlabel("Time (s)")
             ax_w.set_ylabel("Normalised Amplitude")
             ax_w.legend()
             ax_w.grid(True, alpha=0.3)  
-            fig.suptitle(
-            f"Waveform Plot for {station} at {time} for {timespan} seconds", y=.3)
-
+            fig.suptitle(f"Waveform Plot for {station} at {time} for {timespan} seconds", y=.3)
             ax.set_title(f"Horizontal Particle Motion Plot for {station} at {time} for {timespan} seconds", y=1.15)  
-
             plt.tight_layout()
             
+            # Save as png
             if save_png == True:
                 plt.savefig(f'seismic_wfandpolar_{station}.png', dpi=300)
-
-            plt.show()
-            plt.close(fig)
 
     plt.show()
 
@@ -674,17 +724,13 @@ def tabulate_peaks(wave_dict,
         DataFrame containing peak angles for each station.
     """
     
-    angle_results = []   # table storage
-    station_list = list(wave_dict.keys())
+    # Setup table
+    angle_results = []   
 
-    # Find appropriate NS and EW Channels from function input
-    def find_channel(stream, options):
-        for ch in options:
-            tr = stream.select(channel=ch)
-            if len(tr) > 0:
-                return tr[0]
-        return None
-        
+    # Setup station list
+    station_list = list(wave_dict.keys())
+    
+    # Loop through stations, find peaks, and tabulate
     for i, station in enumerate(station_list, start=1):
         print(f"Processing {station}...")
         st = Stream(wave_dict[station])
@@ -732,9 +778,11 @@ def tabulate_peaks(wave_dict,
         angle_results.append({"Station": station,**peak_angles})
 
     # Tabulate
+    date = trNS.stats.starttime.strftime("%Y-%m-%d")
     time = trNS.stats.starttime
     df = pd.DataFrame(angle_results)
-    df.to_csv(f'seismic_directions_{location}.csv', index=False)
+    df.to_csv(f'seismic_directions_{location}_{date}.csv', index=False) # Save as csv file
+
     print(f"Peaks for {location} Earthquake @ {time} (UTC):")
     print(df.to_string(index=False))
 
@@ -745,7 +793,8 @@ def polar_correction(wave_dict,
                      EW_channel,
                      peak_method='first', 
                      ref_angle=0,
-                     col_n=4,):
+                     col_n=4,
+                     save_png=True):
 
     """
     Create polar plots with an applied peak correction from seismic waveform data stored in a dictionary.
@@ -764,8 +813,11 @@ def polar_correction(wave_dict,
         Angle in radians to rotate the polar plot.
     col_n (int):
         Number of columns in the plot grid.
+    save_png (bool):
+        True/False. If True, save each plot as a PNG file.
     """
     
+    # Setup station list
     station_list = list(wave_dict.keys())
     
     # Calculate number of rows needed for figure. Set number of columns in function call
@@ -774,14 +826,7 @@ def polar_correction(wave_dict,
     # Prepare Figure
     fig = plt.figure(figsize=(6*col_n, 6*row_n))
 
-    # Find appropriate NS and EW Channels from function input
-    def find_channel(stream, options):
-        for ch in options:
-            tr = stream.select(channel=ch)
-            if len(tr) > 0:
-                return tr[0]
-        return None
-    
+    # Loop through stations, find peaks, and plot
     for i, station in enumerate(station_list, start=1):
         print(f"Processing {station}...")
         st = Stream(wave_dict[station])
@@ -883,14 +928,14 @@ def polar_correction(wave_dict,
             frameon=True)
 
             # Add cardinal direction annotations
-            rmax = ax.get_rmax()
+            ax.set_rmax(1.2)
             cardinals = {
-                "E": (0, 1.05 * rmax * 1.05),
-                "N": (np.pi / 2, rmax * 1.05),
-                "W": (np.pi, 1.05 * rmax * 1.05),
-                "S": (3 * np.pi / 2, rmax * 1.05)}
+                "E": (0, 1.05 * 1.05),
+                "N": (np.pi / 2, 1.05),
+                "W": (np.pi, 1.05 * 1.05),
+                "S": (3 * np.pi / 2, 1.05)}
 
-            offset = 0.115 * rmax  # Offset for cardinal labels
+            offset = 0.385  # Offset for cardinal labels
 
             for label, (angle, radius) in cardinals.items():
                 ax.text(
@@ -903,13 +948,15 @@ def polar_correction(wave_dict,
                     fontweight="bold",
                     clip_on=False)
             
-              
+            
+            # Create title
             ax.set_title(f"Horizontal Particle Motion Plot \n for {station} at {time} for {timespan} seconds", y=1.15)    
 
+    # Display
     plt.tight_layout()
-    plt.savefig('polar_correction_plots.png', dpi=300)
+    if save_png == True:
+        plt.savefig('polar_correction_plots.png', dpi=300)
     plt.show()
-
 
 def cross_correlation(ref_dict, 
                       target_dict, 
@@ -950,14 +997,7 @@ def cross_correlation(ref_dict,
     # Prepare Figure
     fig = plt.figure(figsize=(6*col_n, 6*row_n))
 
-    # Find appropriate NS and EW Channels from function input
-    def find_channel(stream, options):
-        for ch in options:
-            tr = stream.select(channel=ch)
-            if len(tr) > 0:
-                return tr[0]
-        return None
-    
+    # Setup reference station for first subplot
     ref_station = list(ref_dict.keys())[0]
     ref_stream = Stream(ref_dict[ref_station])
     ref_stream.sort(['channel'])
@@ -971,16 +1011,16 @@ def cross_correlation(ref_dict,
     
     print(f"Processing reference station: {ref_station}...")
 
-    # Setup reference station plot
+    # Ensure x and y data is of same length
     n_ref = min(len(ref_NS.data), len(ref_EW.data))
     y_ref = ref_NS.data[:n_ref]
     x_ref = ref_EW.data[:n_ref]
+
     # Apply peak normalization
     scale_ref = np.max(np.sqrt(x_ref**2 + y_ref**2))
     if scale_ref == 0:
         print(f"{ref_station}: zero amplitude signal.")
         
-
     ref_EW_norm = x_ref / scale_ref
     ref_NS_norm = y_ref / scale_ref
 
@@ -1011,6 +1051,7 @@ def cross_correlation(ref_dict,
                 "S": (3 * np.pi / 2, 1.05)}
 
     offset = 0.385 
+    
     for label, (angle, radius) in cardinals.items():
         ax.text(angle,
                 radius + offset,
@@ -1026,7 +1067,7 @@ def cross_correlation(ref_dict,
 
     ax.set_title(f"Horizontal Particle Motion Plot \n for {ref_station} at {time} for {timespan} seconds", y=1.15)    
 
-    
+    # Loop through stations, cross correlate, and plot
     for i, (station, stream) in enumerate(target_dict.items(), start=2):
             print(f"Processing {station}...")
             st = Stream(stream)
@@ -1038,26 +1079,26 @@ def cross_correlation(ref_dict,
                 print(f"{station}: missing required channels (NS options: {NS_channel}, EW options: {EW_channel}), skipping.")
                 continue
 
-            if target_NS.stats.sampling_rate > ref_NS.stats.sampling_rate:
+            # Align sampling rates
+            if target_NS.stats.sampling_rate > ref_NS.stats.sampling_rate: # If NS target sr > NS reference sr 
                 rNS = ref_NS.copy().resample(target_NS.stats.sampling_rate)
                 tNS = target_NS
-            elif ref_NS.stats.sampling_rate > target_NS.stats.sampling_rate:
+            elif ref_NS.stats.sampling_rate > target_NS.stats.sampling_rate: # If NS target sr < NS reference sr
                 tNS = target_NS.copy().resample(ref_NS.stats.sampling_rate)
                 rNS = ref_NS
             else:
                 rNS = ref_NS
                 tNS = target_NS
                 
-            if target_EW.stats.sampling_rate > ref_EW.stats.sampling_rate:
+            if target_EW.stats.sampling_rate > ref_EW.stats.sampling_rate: # If EW target sr > EW reference sr 
                 rEW = ref_EW.copy().resample(target_EW.stats.sampling_rate)
                 tEW = target_EW
-            elif ref_EW.stats.sampling_rate > target_EW.stats.sampling_rate:
+            elif ref_EW.stats.sampling_rate > target_EW.stats.sampling_rate: # If EW target sr < Ew reference sr 
                 tEW = target_EW.copy().resample(ref_EW.stats.sampling_rate)
                 rEW = ref_EW
             else:
                 tEW = target_EW
                 rEW = ref_EW
-
             
             # Match channel lengths
             n = min(len(rNS.data), len(rEW.data), len(tNS.data), len(tEW.data))
@@ -1066,9 +1107,7 @@ def cross_correlation(ref_dict,
             y2 = tNS.data[:n]
             x2 = tEW.data[:n] 
 
-
             # Apply peak normalization
-            
             scale1 = np.max(np.sqrt((x1**2) + (y1**2)))
             x1 = x1 / scale1
             y1 = y1 / scale1
@@ -1077,33 +1116,28 @@ def cross_correlation(ref_dict,
             x2 = x2 / scale2
             y2 = y2 / scale2
         
+            # Investigate cross correlation
             # Method from Misalignment Angle Correction of Borehole 
             # Seismic Sensors: The Case Study of
             # the Collalto Seismic Network
             # Diez Zaldívar
             # 2016
+            # For full derivation, see the paper above. Only vital steps are conducted here.
             
-
-            S_r = x1 +1j*y1
-            S_k = x2 +1j*y2
-            
-
+            S_r = x1 +1j*y1 # Reference waveform
+            S_k = x2 +1j*y2 # Target waveform
 
             # m = (G^H G)^-1 G^H d)
             # G = S_k, H is conjugate transpose matrix, d = S_r
             # => m_k = (S_k^H * S_k)^-1 *S_k^H * S_r
             # => m_k = sum(|S_k|^2)^-1 * sum(conj(S_k) *S_r)
             m_k = np.sum(np.conj(S_k)* S_r)/np.sum(np.abs(S_k)**2)
-            phi = np.arctan2(np.imag(m_k), np.real(m_k))
-
-
+            phi = np.arctan2(np.imag(m_k), np.real(m_k)) # angle between the target and reference waveform
 
             # Rotate entire signal
             S_k_aligned = S_k * np.exp(1j *phi)
-            x2_aligned =  np.real(S_k_aligned)
-            y2_aligned = np.imag(S_k_aligned)
-
-            
+            x2_aligned =  np.real(S_k_aligned) # EW componet
+            y2_aligned = np.imag(S_k_aligned) # NS component
 
             # Gather polar coordinates
             theta_aligned = np.arctan2(y2_aligned, x2_aligned)
@@ -1174,17 +1208,16 @@ def cross_correlation(ref_dict,
              
             ax.set_title(f"Horizontal Particle Motion Plot \n for {station} at {time} for {timespan} seconds", y=1.15)    
 
+    #Display
     stations = '_'.join(target_dict.keys())
     plt.tight_layout()
     stat_number = len(stations)
-
     if save_png == True:
         if png_title == 'default':
             plt.savefig(f'cross_correlation_{stat_number}stations_{time}.png', dpi=300)
         else:
             plt.savefig(f'{png_title}.png', dpi=300)
 
-        
     plt.show()
 
 def tabulate_cc_correction(ref_dict, 
@@ -1211,16 +1244,10 @@ def tabulate_cc_correction(ref_dict,
         DataFrame containing peak angles for each station.
     """
     
-    angle_results = []   # table storage
+    # Setup up table storage
+    angle_results = []  
     
-    # Find appropriate NS and EW Channels from function input
-    def find_channel(stream, options):
-        for ch in options:
-            tr = stream.select(channel=ch)
-            if len(tr) > 0:
-                return tr[0]
-        return None
-    
+    # Setup reference station for first subplot
     ref_station = list(ref_dict.keys())[0]
     ref_stream = Stream(ref_dict[ref_station])
     ref_stream.sort(['channel'])
@@ -1233,15 +1260,7 @@ def tabulate_cc_correction(ref_dict,
     
     print(f"Processing reference station: {ref_station}...")
 
-     
-    # Find appropriate NS and EW Channels from function input
-    def find_channel(stream, options):
-        for ch in options:
-            tr = stream.select(channel=ch)
-            if len(tr) > 0:
-                return tr[0]
-        return None
-        
+    # Loop through stations, cross correlate, and tabulate
     for i, (station, stream) in enumerate(target_dict.items(), start=2):
         print(f"Processing {station}...")
         st = Stream(stream)
@@ -1253,26 +1272,26 @@ def tabulate_cc_correction(ref_dict,
             print(f"{station}: missing required channels (NS options: {NS_channel}, EW options: {EW_channel}), skipping.")
             continue
 
-        if target_NS.stats.sampling_rate > ref_NS.stats.sampling_rate:
+        # Align sampling rates
+        if target_NS.stats.sampling_rate > ref_NS.stats.sampling_rate: # If NS target sr > NS reference sr 
             rNS = ref_NS.copy().resample(target_NS.stats.sampling_rate)
             tNS = target_NS
-        elif ref_NS.stats.sampling_rate > target_NS.stats.sampling_rate:
+        elif ref_NS.stats.sampling_rate > target_NS.stats.sampling_rate: # If NS target sr < NS reference sr
             tNS = target_NS.copy().resample(ref_NS.stats.sampling_rate)
             rNS = ref_NS
         else:
             rNS = ref_NS
             tNS = target_NS
-                
-        if target_EW.stats.sampling_rate > ref_EW.stats.sampling_rate:
+            
+        if target_EW.stats.sampling_rate > ref_EW.stats.sampling_rate: # If EW target sr > EW reference sr 
             rEW = ref_EW.copy().resample(target_EW.stats.sampling_rate)
             tEW = target_EW
-        elif ref_EW.stats.sampling_rate > target_EW.stats.sampling_rate:
+        elif ref_EW.stats.sampling_rate > target_EW.stats.sampling_rate: # If EW target sr < Ew reference sr 
             tEW = target_EW.copy().resample(ref_EW.stats.sampling_rate)
             rEW = ref_EW
         else:
             tEW = target_EW
             rEW = ref_EW
-
             
         # Match channel lengths
         n = min(len(rNS.data), len(rEW.data), len(tNS.data), len(tEW.data))
@@ -1280,7 +1299,6 @@ def tabulate_cc_correction(ref_dict,
         x1 = rEW.data[:n]
         y2 = tNS.data[:n]
         x2 = tEW.data[:n] 
-
 
         # Apply peak normalization
             
@@ -1292,29 +1310,28 @@ def tabulate_cc_correction(ref_dict,
         x2 = x2 / scale2
         y2 = y2 / scale2
         
+        # Investigate cross correlation
         # Method from Misalignment Angle Correction of Borehole 
         # Seismic Sensors: The Case Study of
         # the Collalto Seismic Network
         # Diez Zaldívar
         # 2016
-            
-
-        S_r = x1 +1j*y1
-        S_k = x2 +1j*y2
-            
+        # For full derivation, see the paper above. Only vital steps are conducted here.
+        
+        S_r = x1 +1j*y1 # Reference waveform
+        S_k = x2 +1j*y2 # Target waveform
 
         # m = (G^H G)^-1 G^H d)
         # G = S_k, H is conjugate transpose matrix, d = S_r
         # => m_k = (S_k^H * S_k)^-1 *S_k^H * S_r
         # => m_k = sum(|S_k|^2)^-1 * sum(conj(S_k) *S_r)
         m_k = np.sum(np.conj(S_k)* S_r)/np.sum(np.abs(S_k)**2)
-        phi = np.arctan2(np.imag(m_k), np.real(m_k))
+        phi = np.arctan2(np.imag(m_k), np.real(m_k)) # angle between the target and reference waveform
 
         # Compute rotation angle
         angle_diff = np.rad2deg(phi)
         if angle_diff > 180:
             angle_diff = angle_diff - 360
-
 
         # Store results in table
         angle_results.append({"Station": station,"Angle Correction": f'{angle_diff:.2f}'})
@@ -1324,9 +1341,12 @@ def tabulate_cc_correction(ref_dict,
     df = pd.DataFrame(angle_results)
     df.to_csv(f'seismic_directions_{location}.csv', index=False)
     print(f"Alignments for {location} Earthquake @ {time} (UTC):")
-    #print(df.to_string(index=False))
 
     return df
+
+    
+    
+
 
 
 
