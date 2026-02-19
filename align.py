@@ -317,7 +317,7 @@ def apply_agc(wave_dict,
 
     return agc_dict
 
-def plot_streams(wave_dict):
+def plot_streams(wave_dict, color='black'):
     
     """
     Plot seismic waveform data stored in a dictionary.
@@ -325,6 +325,8 @@ def plot_streams(wave_dict):
     Parameters:
     wave_dict (dict):
         Dictionary containing seismic waveform data.
+    color (str):
+        Colour for the waveform plots. Default is 'black'.
     """
     
     # Loop through and plot streams
@@ -334,7 +336,7 @@ def plot_streams(wave_dict):
             continue
         st = Stream(wave_dict[station_name])
         print(f"Plotting {station_name}")
-        st.plot()
+        st.plot(color=color)
 
 def find_channel(stream, options):
     """
@@ -1033,7 +1035,7 @@ def cc_correction(ref_dict,
     ax.plot(theta_ref,
             r_ref, 
             alpha=0.65, 
-            color = 'mediumpurple',
+            color = 'red',
             label=f"Reference Station: {ref_station}")
     
     # Legend
@@ -1157,7 +1159,7 @@ def cc_correction(ref_dict,
                 ax.plot(theta_ref,
                         r_ref, 
                         alpha=0.50, 
-                        color = 'mediumpurple',
+                        color = 'red',
                         label=f"Reference Station: {ref_station}")
             elif underlying_plot == 'original':
                 theta_original = np.arctan2(y2,x2)
@@ -1165,13 +1167,14 @@ def cc_correction(ref_dict,
                 ax.plot(theta_original, 
                         r_original, 
                         alpha=0.30, 
-                        color = 'blue',
+                        color = 'darkmagenta',
                         label="Uncorrected Target Station")
-            
+            ax.set_rlabel_position(5)
+
             ax.plot(theta_aligned, 
                     r_aligned, 
                     alpha=0.65, 
-                    color = 'crimson',
+                    color = 'darkmagenta',
                     label="Corrected Target Station")
                 
             # Legend
@@ -1343,12 +1346,6 @@ def tabulate_cc_correction(ref_dict,
     print(f"Alignments for {location} Earthquake @ {time} (UTC):")
 
     return df
-
-    
-
-    
-    
-
 
 
 
