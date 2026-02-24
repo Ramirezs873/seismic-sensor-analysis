@@ -1348,6 +1348,47 @@ def tabulate_cc_correction(ref_dict,
     return df
 
 
+def rotate_stream(wave_dict, NS_channel, EW_channel, angle_list):
+    aligned_wave_dict = {}
+    station_list = list(wave_dict.keys())
+    for (station, stream, angle) in zip(station_list, wave_dict.values(), angle_list):
+        print(f"Processing {station}...")
+        st = Stream(stream)
+        st.sort(['channel'])
+        NS = find_channel(st, NS_channel) 
+        EW = find_channel(st, EW_channel) 
+
+        n = min(len(NS.data), len(EW.data)) 
+        y = NS.data[:n] 
+        x = EW.data[:n] 
+
+        scale = np.max(np.sqrt((x**2)+(y**2)))
+        x = x / scale
+        y = y / scale
+
+        S_k = x + 1j*y
+        S_k_aligned = S_k *np.exp(1j * np.deg2rad(angle))
+
+        x = np.real(S_k_aligned)
+        y = np.imag(S_k_aligned)
+
+        data = np.array([x, y])
+
+        aligned_wave_dict[station] = data
+
+        # Add plotting
+        #plt.title(f"{station} - NS Aligned")
+        #plt.plot(data[1])
+
+        #plt.title(f"{station} - EW Aligned")
+        #plt.plot(data[0])
+        
+
+
+
+    return aligned_wave_dict
+
+
 
 
 
