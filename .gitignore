@@ -18,3 +18,9 @@ Icon
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Images
+.png
+
+# CSV
+.csv
