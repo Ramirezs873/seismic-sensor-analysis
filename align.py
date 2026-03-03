@@ -28,6 +28,8 @@ from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
 from matplotlib import cm
 import matplotlib.gridspec as gridspec
+from scipy import signal
+
 
 
 def seismic_data(client1, 
@@ -1395,6 +1397,29 @@ def rotate_stream(wave_dict, NS_channel, EW_channel, angle_list):
     return aligned_wave_dict
 
 
+def plot_spectrogram(wave_dict, fs):
+
+    # Using output from totate_stream()
+    for station in wave_dict:
+        E = wave_dict[station][0]
+        N = wave_dict[station][1]
+        #t = wave_dict[station][2] # Time series
+
+        list, direction = [E, N], ['East', 'North']
+
+        # Compute spectrogram
+
+        for i, k in zip(list, direction):
+            f, tt, Sxx = signal.spectrogram(i, fs)
+
+            # Plot
+            plt.figure()
+            plt.pcolormesh(tt, f, 10*np.log10(Sxx) + 1e-20, shading='gouraud')
+            plt.colorbar(label='Power (dB)')
+            plt.title(f"{station} - {k}")
+            plt.ylabel('Frequency (Hz)')
+            plt.xlabel('Time (s)')
+            plt.show()
 
 
 
