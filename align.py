@@ -1350,11 +1350,11 @@ def tabulate_cc_correction(ref_dict,
     return df
 
 
-def rotate_stream(wave_dict, NS_channel, EW_channel, angle_list):
+def rotate_stream(wave_dict, NS_channel, EW_channel, misalignment_angle):
     station_list = list(wave_dict.keys())
     aligned_wave_dict = {}
 
-    for (station, stream, angle) in zip(station_list, wave_dict.values(), angle_list):
+    for (station, stream, angle) in zip(station_list, wave_dict.values(), misalignment_angle):
         print(f"Processing {station}...")
         st = Stream(stream)
         st.sort(['channel'])
@@ -1370,12 +1370,11 @@ def rotate_stream(wave_dict, NS_channel, EW_channel, angle_list):
         y = y / scale
 
         S_k = x + 1j*y
-        S_k_aligned = S_k *np.exp(1j * np.deg2rad(angle))
+        S_k_aligned = S_k *np.exp(-1j * np.deg2rad(angle))
 
         x = np.real(S_k_aligned)
         y = np.imag(S_k_aligned)
 
-        data = np.array([x, y])
         times = NS.times("timestamp")[:n]        
         aligned_wave_dict[station] =  x, y, times
         
