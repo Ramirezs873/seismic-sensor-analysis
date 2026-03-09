@@ -1350,7 +1350,12 @@ def tabulate_cc_correction(ref_dict,
     return df
 
 
-def rotate_stream(wave_dict, NS_channel, EW_channel, misalignment_angle):
+def rotate_stream(wave_dict, 
+                  NS_channel, 
+                  EW_channel, 
+                  misalignment_angle,
+                  plot = False):
+    
     station_list = list(wave_dict.keys())
     aligned_wave_dict = {}
 
@@ -1377,19 +1382,59 @@ def rotate_stream(wave_dict, NS_channel, EW_channel, misalignment_angle):
 
         times = NS.times("timestamp")[:n]        
         aligned_wave_dict[station] =  x, y, times
+
+        # Gather polar coordinates
+        theta_aligned = np.arctan2(y, x)
+        r_aligned = np.sqrt(x**2 + y**2)
         
 
-        
+        if plot == True:
+            # Create polar plot
+            fig = plt.figure(figsize=(6, 6))
 
+            ax = fig.add_subplot(1, 1, 1, projection="polar")
+            
+            ax.set_rlabel_position(5)
 
+            ax.plot(theta_aligned, 
+                    r_aligned, 
+                    alpha=0.65, 
+                    color = 'darkmagenta',
+                    label="Corrected Target Station")
+                
+            # Legend
+            ax.legend(
+            loc="upper right",
+            bbox_to_anchor=(1.3, 1.1),
+            fontsize=8,
+            frameon=True)
 
-        # Add plotting
-        #plt.title(f"{station} - NS Aligned")
-        #plt.plot(data[1])
+            # Add cardinal direction annotations
+            ax.set_rmax(1.2)
+            cardinals = {
+                "E": (0, 1.05 * 1.05),
+                "N": (np.pi / 2, 1.05),
+                "W": (np.pi, 1.05 * 1.05),
+                "S": (3 * np.pi / 2, 1.05)}
 
-        #plt.title(f"{station} - EW Aligned")
-        #plt.plot(data[0])
-        
+            offset = 0.385  # Offset for cardinal labels
+
+            for label, (angle, radius) in cardinals.items():
+                ax.text(
+                    angle,
+                    radius + offset,
+                    label,
+                    ha="center",
+                    va="center",
+                    fontsize=12,
+                    fontweight="bold",
+                    clip_on=False)
+                
+            
+
+            plt.tight_layout()
+
+            plt.show()
 
 
 
