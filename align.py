@@ -1456,9 +1456,13 @@ def plot_spectrogram(wave_dict, fs):
         for i, k in zip(list, direction):
             f, tt, Sxx = signal.spectrogram(i, fs)
 
+            power = 10*np.log10(Sxx + 1e-20)
+            vmin = np.percentile(power, 5)
+            vmax = np.percentile(power, 95)
+
             # Plot
             plt.figure()
-            plt.pcolormesh(tt, f, 10*np.log10(Sxx) + 1e-20, shading='gouraud')
+            plt.pcolormesh(tt, f, power, shading='gouraud', vmin=vmin, vmax=vmax)
             plt.colorbar(label='Power (dB)')
             plt.title(f"{station} - {k}")
             plt.ylabel('Frequency (Hz)')
