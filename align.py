@@ -1380,8 +1380,8 @@ def rotate_stream(wave_dict,
         x = np.real(S_k_aligned)
         y = np.imag(S_k_aligned)
 
-        times = NS.times("timestamp")[:n]        
-        aligned_wave_dict[station] =  x, y, times
+        #times = NS.times("timestamp")[:n]        
+        aligned_wave_dict[station] =  x, y
 
         # Gather polar coordinates
         theta_aligned = np.arctan2(y, x)
