@@ -29,6 +29,7 @@ from matplotlib.colors import Normalize
 from matplotlib import cm
 import matplotlib.gridspec as gridspec
 from scipy import signal
+from obspy.signal.util import smooth
 
 
 
@@ -1441,7 +1442,8 @@ def rotate_stream(wave_dict,
     return aligned_wave_dict
 
 
-def plot_spectrogram(wave_dict, fs):
+def plot_spectrogram(wave_dict, 
+                     fs):
 
     # Using output from totate_stream()
     for station in wave_dict:
@@ -1449,12 +1451,12 @@ def plot_spectrogram(wave_dict, fs):
         N = wave_dict[station][1]
         #t = wave_dict[station][2] # Time series
 
-        list, direction = [E, N], ['East', 'North']
+        signals, direction = [E, N], ['East', 'North']
 
         # Compute spectrogram
 
-        for i, k in zip(list, direction):
-            f, tt, Sxx = signal.spectrogram(i, fs)
+        for i, k in zip(signals, direction):
+            f, tt, Sxx = signal.spectrogram(i, fs, nperseg=1024, noverlap=512)
 
             power = 10*np.log10(Sxx + 1e-20)
             vmin = np.percentile(power, 5)
@@ -1469,7 +1471,33 @@ def plot_spectrogram(wave_dict, fs):
             plt.xlabel('Time (s)')
             plt.show()
 
+def plot_psd(wave_dict, fs):
+        # Using output from totate_stream()
+    for station in wave_dict:
+        E = wave_dict[station][0]
+        N = wave_dict[station][1]
+        H = np.sqrt(E**2 + N**2)
+        #t = wave_dict[station][2] # Time series
 
+        # Compute PSD
+        f, Pxx_E = signal.welch(E, fs, nperseg=1024, noverlap=512)
+        f, Pxx_N = signal.welch(N, fs, nperseg=1024, noverlap=512)
+        f, Pxx_H = signal.welch(H, fs, nperseg=1024, noverlap=512)
+
+        power_E = 10*np.log10(Pxx_E + 1e-20)
+        power_N = 10*np.log10(Pxx_N + 1e-20)
+        power_H = 10*np.log10(Pxx_H + 1e-20)
+
+        # Plot
+        plt.figure()
+        plt.plot(f, power_E, label ='East')
+        plt.plot(f, power_N, label ='North')
+        plt.plot(f, power_H, label ='Total Magnitude')
+        plt.title(f"{station} - Horizontal PSD")
+        plt.legend()
+        plt.ylabel('Power (dB)')
+        plt.xlabel('Frequency (Hz)')
+        plt.show()
 
 
 
