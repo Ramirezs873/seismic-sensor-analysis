@@ -30,6 +30,7 @@ from matplotlib import cm
 import matplotlib.gridspec as gridspec
 from scipy import signal
 from obspy.signal.util import smooth
+from pathlib import Path
 
 
 
@@ -49,7 +50,8 @@ def seismic_data(client1,
                  network2=None, 
                  station2=None, 
                  location2=None, 
-                 channel2=None):
+                 channel2=None,
+                 config=None):
 
     """
     Gather seismic waveform data from FDSN clients,
@@ -89,6 +91,10 @@ def seismic_data(client1,
     # Check if file already exists
     stat_number = len(station1) # Number of stations
     time = t_start.strftime("%Y-%m-%d") # Start date of data
+    # Config Support
+    base_path = Path(config["seismic_data_path"]) if config else Path(".")
+    base_path.mkdir(parents=True, exist_ok=True)
+
 
     if ref_stat == True:
         title = f'{network1}_{network2}_{stat_number}stations_{station2}'
@@ -96,10 +102,12 @@ def seismic_data(client1,
         title = f'{network1}_{stat_number}stations'
     
     filename = f"station_data_{title}_{time}.mseed"
+    file_path = base_path / filename
 
-    if os.path.exists(filename):
-        print(f"Reading existing file: {filename}")
-        station_data = read(filename)
+
+    if file_path.exists():
+        print(f"Reading existing file: {file_path}")
+        station_data = read(str(file_path))
 
     else:
         print("File not found. Downloading data")
@@ -132,10 +140,8 @@ def seismic_data(client1,
             station_data = station_data + station_data2
             station_data.merge() # Combine the target and reference station data to be written to a single file and stored as a dictionary
 
-            
-    # Save as a mseed file
-    filename = f"station_data_{title}_{time}.mseed"
-    station_data.write(filename, format="mseed")
+        station_data.write(str(file_path), format="mseed")
+        print(f"Saved to: {file_path}")
 
     # Write to a dictionary
     wave_dict = defaultdict(list) 
