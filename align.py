@@ -1356,7 +1356,6 @@ def tabulate_cc_correction(ref_dict,
 
     return df
 
-
 def rotate_stream(wave_dict, 
                   NS_channel, 
                   EW_channel, 
@@ -1386,9 +1385,12 @@ def rotate_stream(wave_dict,
 
         x = np.real(S_k_aligned)
         y = np.imag(S_k_aligned)
+        fs = NS.stats.sampling_rate
+        t_start = NS.stats.starttime
+
 
         #times = NS.times("timestamp")[:n]        
-        aligned_wave_dict[station] =  x, y
+        aligned_wave_dict[station] =  x, y, fs, t_start
 
         # Gather polar coordinates
         theta_aligned = np.arctan2(y, x)
