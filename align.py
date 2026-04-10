@@ -189,6 +189,27 @@ def select_time(wave_dict,
 
     return new_dict
 
+def demean_detrend(wave_dict):
+    
+    """
+    Demean and detrend seismic waveform data stored in a dictionary without altering the original.
+
+    Parameters:
+    wave_dict (dict):
+        Dictionary containing seismic waveform data.
+    """
+    # Demean and detrend the data and write to a dictionary
+    new_dict = defaultdict(list)
+
+    for station_name, traces in wave_dict.items():  
+        st = Stream(traces).copy() # Copy to avoid overwriting data
+        st.detrend("demean")
+        st.detrend("linear")
+
+        new_dict[station_name].extend(st.traces)
+    
+    return new_dict
+
 def apply_window(wave_dict, 
                  type = 'hann',
                  max_percentage = None,
@@ -218,6 +239,7 @@ def apply_window(wave_dict,
 
     for station_name, traces in wave_dict.items():  
         st = Stream(traces).copy() # Copy to avoid overwriting data
+        
         st.taper(type=type, max_percentage=max_percentage, max_length=max_length, side=side)
 
         new_dict[station_name].extend(st)
