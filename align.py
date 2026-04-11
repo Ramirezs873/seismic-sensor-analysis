@@ -1381,6 +1381,7 @@ def tabulate_cc_correction(ref_dict,
 def rotate_stream(wave_dict, 
                   NS_channel, 
                   EW_channel, 
+                  Z_channel,
                   misalignment_angle,
                   plot = False):
     
@@ -1393,10 +1394,13 @@ def rotate_stream(wave_dict,
         st.sort(['channel'])
         NS = find_channel(st, NS_channel) 
         EW = find_channel(st, EW_channel) 
+        Z = find_channel(st, Z_channel)
 
         n = min(len(NS.data), len(EW.data)) 
         y = NS.data[:n] 
         x = EW.data[:n] 
+        z = Z.data[:n]
+
 
         scale = np.max(np.sqrt((x**2)+(y**2)))
         x = x / scale
@@ -1412,7 +1416,7 @@ def rotate_stream(wave_dict,
 
 
         #times = NS.times("timestamp")[:n]        
-        aligned_wave_dict[station] =  x, y, fs, t_start
+        aligned_wave_dict[station] =  x, y, z, fs, t_start
 
         # Gather polar coordinates
         theta_aligned = np.arctan2(y, x)
