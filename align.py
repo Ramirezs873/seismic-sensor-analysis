@@ -379,11 +379,12 @@ def find_channel(stream, options):
     options (list of str):
         A list of channel codes.
     """
-    # Loop through streams and find the first associated channel code
+    # Loop through streams and find the associated channel code
+    traces = []
     for ch in options:
-        tr = stream.select(channel=ch)
-        if len(tr) > 0:
-            return tr[0] # Return first channel code
+        traces.extend(stream.select(channel=ch))
+        if len(traces) > 0:
+            return traces # Return first channel code
         
     # If none are found
     return None 
@@ -1396,13 +1397,58 @@ def rotate_stream(wave_dict,
         EW = find_channel(st, EW_channel) 
         Z = find_channel(st, Z_channel)
 
-        n = min(len(NS.data), len(EW.data)) 
-        y = NS.data[:n] 
-        x = EW.data[:n] 
-        z = Z.data[:n]
+        t_start = min(tr.stats.starttime for tr in st)
+        t_end   = max(tr.stats.endtime for tr in st)
+        fs = st[0].stats.sampling_rate
+        npts = int(round((t_end - t_start) * fs))
+
+        # Make each channel a continuous data set by filling in the gaps with NaNs. 
+        # This ensures that the cross correlation and rotation are applied to the entire signal, even if there are gaps in the data.
+        E = np.full(npts, np.nan)
+        N = np.full(npts, np.nan)
+        Z_2 = np.full(npts, np.nan)
+
+        for tr in EW:
+            i0 = int(round((tr.stats.starttime - t_start) * fs))
+            i1 = i0 + len(tr.data)
+            if i1 > npts:
+                i1 = npts
+                data = tr.data[:(i1 - i0)]
+            else:
+                data = tr.data
+
+            E[i0:i1] = data
+
+        for tr in NS:
+            i0 = int(round((tr.stats.starttime - t_start) * fs))
+            i1 = i0 + len(tr.data)
+            if i1 > npts:
+                i1 = npts
+                data = tr.data[:(i1 - i0)]
+            else:
+                data = tr.data
+
+            N[i0:i1] = data
+
+        for tr in Z:
+            i0 = int(round((tr.stats.starttime - t_start) * fs))
+            i1 = i0 + len(tr.data)
+            if i1 > npts:
+                i1 = npts
+                data = tr.data[:(i1 - i0)]
+            else:
+                data = tr.data
+
+            Z_2[i0:i1] = data
+
+        n = min(len(N), len(E), len(Z_2)) 
+        y = N[:n] 
+        x = E[:n] 
+        z = Z_2[:n]
 
 
-        scale = np.max(np.sqrt((x**2)+(y**2)))
+        scale = np.nanmax(np.sqrt((x**2)+(y**2)))
+        
         x = x / scale
         y = y / scale
 
@@ -1411,10 +1457,7 @@ def rotate_stream(wave_dict,
 
         x = np.real(S_k_aligned)
         y = np.imag(S_k_aligned)
-        fs = NS.stats.sampling_rate
-        t_start = NS.stats.starttime
-
-
+        
         #times = NS.times("timestamp")[:n]        
         aligned_wave_dict[station] =  x, y, z, fs, t_start
 
@@ -1464,14 +1507,10 @@ def rotate_stream(wave_dict,
                     fontsize=12,
                     fontweight="bold",
                     clip_on=False)
-                
-            
 
             plt.tight_layout()
 
             plt.show()
-
-
 
     return aligned_wave_dict
 
