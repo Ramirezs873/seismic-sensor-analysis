@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 import os
 from obspy import read
-import obspy
+from obspy import Trace
 from obspy.clients.fdsn import Client
 from obspy import UTCDateTime as UTC
 from obspy import Stream
@@ -31,6 +31,8 @@ import matplotlib.gridspec as gridspec
 from scipy import signal
 from obspy.signal.util import smooth
 from pathlib import Path
+from obspy import UTCDateTime
+
 
 
 
@@ -1388,6 +1390,7 @@ def rotate_stream(wave_dict,
     
     station_list = list(wave_dict.keys())
     aligned_wave_dict = {}
+    aligned_obspy = {}
 
     for (station, stream, angle) in zip(station_list, wave_dict.values(), misalignment_angle):
         print(f"Processing {station}...")
@@ -1461,6 +1464,28 @@ def rotate_stream(wave_dict,
         #times = NS.times("timestamp")[:n]        
         aligned_wave_dict[station] =  x, y, z, fs, t_start
 
+        # Create new obspy stream with aligned data
+        st = Stream()
+        NS_name = NS[0].stats.channel if NS else None
+        EW_name = EW[0].stats.channel if EW else None
+        Z_name  = Z[0].stats.channel if Z else None
+        components = {EW_name: x, NS_name: y, Z_name: z}
+        if NS_name is None or EW_name is None or Z_name is None:
+            print(f"Skipping {station}. Missing channel")
+            continue
+
+        for channel, data in components.items():
+            network_name, station_name, *_ = station.split('.')
+            tr = Trace(data=data)
+            tr.stats.network = network_name
+            tr.stats.station = station_name
+            tr.stats.channel = channel
+            tr.stats.starttime = UTCDateTime(t_start)
+            tr.stats.sampling_rate = fs
+            st.append(tr)
+
+        aligned_obspy[station] = st
+
         # Gather polar coordinates
         theta_aligned = np.arctan2(y, x)
         r_aligned = np.sqrt(x**2 + y**2)
@@ -1512,7 +1537,7 @@ def rotate_stream(wave_dict,
 
             plt.show()
 
-    return aligned_wave_dict
+    return aligned_wave_dict, aligned_obspy
 
 
 def plot_spectrogram(wave_dict, 
