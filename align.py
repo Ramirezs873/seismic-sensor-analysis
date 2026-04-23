@@ -1390,7 +1390,7 @@ def rotate_stream(wave_dict,
     
     station_list = list(wave_dict.keys())
     aligned_wave_dict = {}
-    aligned_obspy = {}
+    aligned_obspy = defaultdict(list)
 
     for (station, stream, angle) in zip(station_list, wave_dict.values(), misalignment_angle):
         print(f"Processing {station}...")
