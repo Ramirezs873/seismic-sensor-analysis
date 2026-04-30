@@ -103,7 +103,7 @@ def seismic_data(client1,
     else:
         title = f'{network1}_{stat_number}stations'
     
-    filename = f"station_data_{title}_{time}.mseed"
+    filename = f"station_data_{title}_{time}"
     file_path = base_path / filename
 
 
@@ -142,7 +142,7 @@ def seismic_data(client1,
             station_data = station_data + station_data2
             station_data.merge() # Combine the target and reference station data to be written to a single file and stored as a dictionary
 
-        station_data.write(str(file_path), format="mseed")
+        station_data.write(str(file_path), format="MSEED")
         print(f"Saved to: {file_path}")
 
     # Write to a dictionary
@@ -156,11 +156,14 @@ def seismic_data(client1,
         )
         wave_dict[station].append(tr) 
 
-    return wave_dict    
+    return wave_dict 
 
 def select_time(wave_dict, 
                 t_start, 
-                duration):
+                duration,
+                save_mseed=False,
+                config=None,
+                filename='default'):
     
     """
     Select a specific time window from seismic waveform data stored in a dictionary without altering the original.
@@ -172,22 +175,51 @@ def select_time(wave_dict,
         Start time for the time window.
     duration (float):
         Duration of the time window in seconds.
-    
+    save_mseed (bool):
+        True/False. True to save as mseed file.
+    config (dict):
+        Information from a config file containing the local "seismic_data_path".
+    filename (str):
+        Title of saved mseed file.
     Returns:
     new_dict (dict):
         Dictionary containing selected seismic waveform data.
     """
 
-    # Establish timespan
-    t_end = t_start + duration
+    # Read file if it exists
+    base_path = Path(config["seismic_data_path"]) if config else Path(".")
+    base_path.mkdir(parents=True, exist_ok=True)
+    filetitle = f"{filename}_{t_start.strftime('%Y-%m-%d')}_{duration}"
+    file_path = (base_path / filetitle).with_suffix(".mseed")
 
-    # Trim to desired timespan and write to a direction
-    new_dict = defaultdict(list)
-    for station_name in wave_dict:
-        st = Stream(wave_dict[station_name]).copy() # Copy to avoid overwriting data
-        st.trim(starttime=t_start, endtime=t_end, pad=False)
+    if file_path.exists():
+        print(f"Reading existing file: {file_path}")
+        stream = read(str(file_path))
+        new_dict = defaultdict(list)
+        for tr in stream:
+            new_dict[tr.stats.station].append(tr)
 
-        new_dict[station_name].extend(st.traces)
+
+    else:
+        # Establish timespan
+        t_end = t_start + duration
+        streams = []
+        # Trim to desired timespan and write to a direction
+        new_dict = defaultdict(list)
+        for station_name in wave_dict:
+            st = Stream(wave_dict[station_name]).copy() # Copy to avoid overwriting data
+            st.trim(starttime=t_start, endtime=t_end, pad=False)
+            streams.append(st)
+            new_dict[station_name].extend(st.traces)
+
+        if save_mseed == True:
+            merged_stream = streams[0].copy()
+            for st in streams[1:]:
+                merged_stream += st
+            merged_stream.merge()
+
+            merged_stream.write(f'{str(file_path)}', format="MSEED")
+
 
     return new_dict
 
