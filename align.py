@@ -1206,9 +1206,9 @@ def cc_correction(ref_dict,
     print(f"Processing reference station: {ref_station}...")
 
     # Ensure x and y data is of same length
-    n_ref = min(len(ref_NS.data), len(ref_EW.data))
-    y_ref = ref_NS.data[:n_ref]
-    x_ref = ref_EW.data[:n_ref]
+    n_ref = min(len(ref_NS[0].data), len(ref_EW[0].data))
+    y_ref = ref_NS[0].data[:n_ref]
+    x_ref = ref_EW[0].data[:n_ref]
 
     # Apply peak normalization
     scale_ref = np.max(np.sqrt(x_ref**2 + y_ref**2))
@@ -1256,8 +1256,8 @@ def cc_correction(ref_dict,
                 fontweight="bold",
                 clip_on=False)
 
-    time = ref_NS.stats.starttime.strftime("%Y-%m-%d %H:%M:%S")
-    timespan = ref_NS.stats.endtime - ref_NS.stats.starttime
+    time = ref_NS[0].stats.starttime.strftime("%Y-%m-%d %H:%M:%S")
+    timespan = ref_NS[0].stats.endtime - ref_NS[0].stats.starttime
 
     ax.set_title(f"Horizontal Particle Motion Plot \n for {ref_station} at {time} for {timespan} seconds", y=1.15)    
 
@@ -1272,28 +1272,28 @@ def cc_correction(ref_dict,
             if target_NS is None or target_EW is None:
                 print(f"{station}: missing required channels (NS options: {NS_channel}, EW options: {EW_channel}), skipping.")
                 continue
-
-            # Align sampling rates
-            if target_NS.stats.sampling_rate > ref_NS.stats.sampling_rate: # If NS target sr > NS reference sr 
-                rNS = ref_NS.copy().resample(target_NS.stats.sampling_rate)
-                tNS = target_NS
-            elif ref_NS.stats.sampling_rate > target_NS.stats.sampling_rate: # If NS target sr < NS reference sr
-                tNS = target_NS.copy().resample(ref_NS.stats.sampling_rate)
-                rNS = ref_NS
-            else:
-                rNS = ref_NS
-                tNS = target_NS
                 
-            if target_EW.stats.sampling_rate > ref_EW.stats.sampling_rate: # If EW target sr > EW reference sr 
-                rEW = ref_EW.copy().resample(target_EW.stats.sampling_rate)
-                tEW = target_EW
-            elif ref_EW.stats.sampling_rate > target_EW.stats.sampling_rate: # If EW target sr < Ew reference sr 
-                tEW = target_EW.copy().resample(ref_EW.stats.sampling_rate)
-                rEW = ref_EW
+            # Align sampling rates
+            if target_NS[0].stats.sampling_rate > ref_NS[0].stats.sampling_rate: # If NS target sr > NS reference sr 
+                rNS = ref_NS[0].copy().resample(target_NS[0].stats.sampling_rate)
+                tNS = target_NS[0]
+            elif ref_NS[0].stats.sampling_rate > target_NS[0].stats.sampling_rate: # If NS target sr < NS reference sr
+                tNS = target_NS[0].copy().resample(ref_NS[0].stats.sampling_rate)
+                rNS = ref_NS[0]
             else:
-                tEW = target_EW
-                rEW = ref_EW
-            
+                rNS = ref_NS[0]
+                tNS = target_NS[0]
+                
+            if target_EW[0].stats.sampling_rate > ref_EW[0].stats.sampling_rate: # If EW target sr > EW reference sr 
+                rEW = ref_EW[0].copy().resample(target_EW[0].stats.sampling_rate)
+                tEW = target_EW[0]
+            elif ref_EW[0].stats.sampling_rate > target_EW[0].stats.sampling_rate: # If EW target sr < Ew reference sr 
+                tEW = target_EW[0].copy().resample(ref_EW[0].stats.sampling_rate)
+                rEW = ref_EW[0]
+            else:
+                tEW = target_EW[0]
+                rEW = ref_EW[0]
+
             # Match channel lengths
             n = min(len(rNS.data), len(rEW.data), len(tNS.data), len(tEW.data))
             y1 = rNS.data[:n]
@@ -1398,9 +1398,9 @@ def cc_correction(ref_dict,
                     clip_on=False)
                 
             # For title
-            time = ref_NS.stats.starttime.strftime("%Y-%m-%d %H-%M-%S")
-            timespan = ref_NS.stats.endtime - ref_NS.stats.starttime
-             
+            time = ref_NS[0].stats.starttime.strftime("%Y-%m-%d %H-%M-%S")
+            timespan = ref_NS[0].stats.endtime - ref_NS[0].stats.starttime
+
             ax.set_title(f"Horizontal Particle Motion Plot \n for {station} at {time} for {timespan} seconds", y=1.15)    
 
     #Display
@@ -1468,25 +1468,25 @@ def tabulate_cc_correction(ref_dict,
             continue
 
         # Align sampling rates
-        if target_NS.stats.sampling_rate > ref_NS.stats.sampling_rate: # If NS target sr > NS reference sr 
-            rNS = ref_NS.copy().resample(target_NS.stats.sampling_rate)
-            tNS = target_NS
-        elif ref_NS.stats.sampling_rate > target_NS.stats.sampling_rate: # If NS target sr < NS reference sr
-            tNS = target_NS.copy().resample(ref_NS.stats.sampling_rate)
-            rNS = ref_NS
+        if target_NS[0].stats.sampling_rate > ref_NS[0].stats.sampling_rate: # If NS target sr > NS reference sr 
+            rNS = ref_NS[0].copy().resample(target_NS[0].stats.sampling_rate)
+            tNS = target_NS[0]
+        elif ref_NS[0].stats.sampling_rate > target_NS[0].stats.sampling_rate: # If NS target sr < NS reference sr
+            tNS = target_NS[0].copy().resample(ref_NS[0].stats.sampling_rate)
+            rNS = ref_NS[0]
         else:
-            rNS = ref_NS
-            tNS = target_NS
+            rNS = ref_NS[0]
+            tNS = target_NS[0]
             
-        if target_EW.stats.sampling_rate > ref_EW.stats.sampling_rate: # If EW target sr > EW reference sr 
-            rEW = ref_EW.copy().resample(target_EW.stats.sampling_rate)
-            tEW = target_EW
-        elif ref_EW.stats.sampling_rate > target_EW.stats.sampling_rate: # If EW target sr < Ew reference sr 
-            tEW = target_EW.copy().resample(ref_EW.stats.sampling_rate)
-            rEW = ref_EW
+        if target_EW[0].stats.sampling_rate > ref_EW[0].stats.sampling_rate: # If EW target sr > EW reference sr 
+            rEW = ref_EW[0].copy().resample(target_EW[0].stats.sampling_rate)
+            tEW = target_EW[0]
+        elif ref_EW[0].stats.sampling_rate > target_EW[0].stats.sampling_rate: # If EW target sr < Ew reference sr 
+            tEW = target_EW[0].copy().resample(ref_EW[0].stats.sampling_rate)
+            rEW = ref_EW[0]
         else:
-            tEW = target_EW
-            rEW = ref_EW
+            tEW = target_EW[0]
+            rEW = ref_EW[0]
             
         # Match channel lengths
         n = min(len(rNS.data), len(rEW.data), len(tNS.data), len(tEW.data))
@@ -1532,7 +1532,7 @@ def tabulate_cc_correction(ref_dict,
         angle_results.append({"Station": station,"Angle Correction": f'{angle_diff:.2f}'})
 
     # Tabulate
-    time = ref_NS.stats.starttime.strftime("%Y-%m-%d %H-%M-%S")
+    time = ref_NS[0].stats.starttime.strftime("%Y-%m-%d %H-%M-%S")
     df = pd.DataFrame(angle_results)
     df.to_csv(f'seismic_directions_{location}.csv', index=False)
     print(f"Alignments for {location} Earthquake @ {time} (UTC):")
