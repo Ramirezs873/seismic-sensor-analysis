@@ -53,7 +53,8 @@ def seismic_data(client1,
                  station2=None, 
                  location2=None, 
                  channel2=None,
-                 config=None):
+                 config=None,
+                 file_name = None):
 
     """
     Gather seismic waveform data from FDSN clients,
@@ -84,6 +85,8 @@ def seismic_data(client1,
         True/False. If True, gather data from a second group of stations.
     "..."2:
         Identical parameters as those labeled '1' but now for group 2 if ref_stat is True.
+    file_name (str):
+        Filename to save the data as. Ensure to add .mseed at the end. e.g 'station_data.mseed'
 
     Returns:
     wave_dict (dict):
@@ -103,7 +106,10 @@ def seismic_data(client1,
     else:
         title = f'{network1}_{stat_number}stations'
     
-    filename = f"station_data_{title}_{time}"
+    if file_name is None:
+        filename = f"station_data_{title}_{time}"
+    else:
+        filename = file_name
     file_path = (base_path / filename).with_suffix(".mseed")
 
 
